@@ -5,16 +5,13 @@ import { useNavigate } from "react-router-dom";
 const MainMenu: React.FC = () => {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        Nakama.authenticate();
-    }, []);
+    // useEffect(() => {
+    //     Nakama.authenticate();
+    // }, []);
 
     const handleStart = async () => {
         await Nakama.authenticate();
-        await Nakama.findMatch(() => {
-            console.log("Both players joined. Navigating to Game screen...");
-            navigate("/in-game"); // Navigate to the actual game screen
-        });
+        await Nakama.findMatch();
         console.log("Navigating to Matchmaking screen...");
         navigate("/matchmaking");
     };

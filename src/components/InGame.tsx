@@ -65,6 +65,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import CONFIG from '../config';
 import Nakama from '../Nakama';
+import { useNavigate } from 'react-router-dom';
 
 const InGame: React.FC = () => {
     const [board, setBoard] = useState<number[]>(Array(9).fill(0));
@@ -72,6 +73,8 @@ const InGame: React.FC = () => {
     const [playerTurn, setPlayerTurn] = useState<boolean>(false);
     const [playerPos, setPlayerPos] = useState<number | null>(null);
     const [showPlayAIBtn, setShowPlayAIBtn] = useState<boolean>(false);
+    const navigate = useNavigate()
+    console.log(Nakama.session);
 
     const nakamaListener = useCallback(() => {
         if (!Nakama.socket) {
@@ -112,6 +115,7 @@ const InGame: React.FC = () => {
 
     const handleGameData = (data: any) => {
         const userId = localStorage.getItem("user_id") || "";
+        console.log("user_id", userId)
         if (data.marks[userId] === 1) {
             setPlayerTurn(true);
             setPlayerPos(1);
@@ -146,6 +150,14 @@ const InGame: React.FC = () => {
         }
     };
 
+    const handleLeave = () => {
+        localStorage.removeItem("user_id");
+        localStorage.removeItem("device_id");
+        Nakama.playerIds = []
+        navigate("/")
+    }
+
+
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-blue-500">
             <h1 className="text-3xl font-bold text-white mb-8">{headerText}</h1>
@@ -156,19 +168,20 @@ const InGame: React.FC = () => {
                         className="flex items-center justify-center w-20 h-20 bg-yellow-400 border-2 border-white"
                         onClick={() => makeMove(index)}
                     >
+
                         {cell === 1 && <img src="/assets/X.png" alt="X" />}
                         {cell === 2 && <img src="/assets/O.png" alt="O" />}
                     </div>
                 ))}
             </div>
-            {showPlayAIBtn && (
+            {
                 <button
                     className="mt-8 bg-yellow-400 text-xl text-blue-500 py-2 px-8 rounded hover:scale-105 transition-transform"
-                // onClick={() => Nakama.inviteAI()}
+                    onClick={handleLeave}
                 >
-                    Continue with AI
+                    Leave
                 </button>
-            )}
+            }
         </div>
     );
 };

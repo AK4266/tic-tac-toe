@@ -4,34 +4,24 @@ import Nakama from "../Nakama";
 
 const Matchmaking: React.FC = () => {
     const navigate = useNavigate();
-    const [matchResult, setMatchResult] = useState<any>(null); // State to store the match result
+    const [playerIds, setPlayerIds] = useState<string[]>([]); // Local state for player IDs
 
     const initiateMatchmaking = async () => {
         await Nakama.authenticate();
 
-        // Handle match presence updates
-        Nakama.socket.onmatchpresence = (event: any) => {
-            console.log("Presence update:", event);
-
-            // Check if two players are in the match
-            if (event.joins.length >= 2) {
-                console.log("Both players joined. Navigating to Game screen...");
-                navigate('/in-game');
-            }
-        };
+        // Start listening for player presence updates
+        Nakama.startListeningForPlayerPresence(() => {
+            console.log("Both players are ready. Navigating to Game screen...");
+            navigate('/in-game');
+        });
 
         // Start matchmaking process
         const result = await Nakama.client.listMatches(Nakama.session);
         console.log(result);
 
-        // Update state to trigger useEffect re-run when result changes
-        setMatchResult(result);
-
-        // Join the match if available or start a new one
         if (result.matches && result.matches.length > 0) {
             const firstMatch = result.matches[0];
 
-            // Check match size and navigate accordingly
             if (firstMatch.size === 1) {
                 await Nakama.socket.joinMatch(firstMatch.match_id);
                 console.log("Joined existing match.");
@@ -44,9 +34,37 @@ const Matchmaking: React.FC = () => {
         }
     };
 
+    // Effect to navigate when there are two players
     useEffect(() => {
+        if (playerIds.length === 2) {
+            console.log("Navigating to in-game...");
+            navigate('/in-game');
+        }
+    }, [playerIds, navigate]);
+
+    // Listen for player IDs changes from Nakama
+    useEffect(() => {
+        const updatePlayerIds = () => {
+            setPlayerIds(Nakama.playerIds);
+        };
+
+        // Update player IDs on socket presence update
+        Nakama.socket.onmatchpresence = (event: any) => {
+            event.joins.forEach((join: any) => {
+                if (!playerIds.includes(join.user_id)) {
+                    setPlayerIds((prevIds) => [...prevIds, join.user_id]);
+                }
+            });
+        };
+
+        // Call the matchmaking function
         initiateMatchmaking();
-    }, [matchResult]); // Trigger initiateMatchmaking again when matchResult changes
+
+        // Cleanup listener on unmount
+        return () => {
+            Nakama.socket.onmatchpresence = null; // Remove the event listener
+        };
+    }, [playerIds]); // Add playerIds as a dependency to ensure it updates correctly
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-blue-500">

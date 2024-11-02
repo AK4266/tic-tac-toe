@@ -7,12 +7,19 @@ interface FindMatchResponse extends RpcResponse {
     };
 }
 
+class GameState {
+    public playerIndex = 0;
+}
+
 class Nakama {
     client: Client;
     session: any;
     socket: any;
     matchID: string | null = null;
     onMatchReady: (() => void) | null = null;
+    playerIds: string[] = [];
+    onPlayerReady: (() => void) | null = null;
+    public gameState: GameState = new GameState();
 
     constructor() {
         const useSSL = false;
@@ -44,11 +51,21 @@ class Nakama {
         this.socket.onmatchpresence = (event: any) => {
             console.log("Match presence event:", event);
             // Log user_id for each presence to verify both are recognized
-            event.joins.forEach((join: any) => console.log("Joined user:", join.user_id));
+            // event.joins.forEach((join: any) => console.log("Joined user:", join.user_id));
+            event.joins.forEach((join: any) => {
+                if (!this.playerIds.includes(join.user_id)) {
+                    this.playerIds.push(join.user_id);
+                }
+            });
+            console.log(this.playerIds)
             if (event.joins.length >= 2 && this.onMatchReady) {
                 this.onMatchReady(); // Only navigate when two players are confirmed
             }
         };
+
+        if (this.playerIds.length >= 2 && this.onPlayerReady) {
+            this.onPlayerReady();
+        }
 
         this.socket.onmatchdata = (data: any) => {
             console.log("Received match data:", data);
@@ -57,25 +74,52 @@ class Nakama {
 
     }
 
-    async findMatch(onMatchReadyCallback: () => void) {
-        this.onMatchReady = onMatchReadyCallback; // Set the callback to handle navigation
+    async createMatch(): Promise<void> {
+        if (!this.socket || !this.session) return;
+        const match = await this.socket.createMatch();
+        console.log("Match created:", match.match_id);
+    }
+
+    async findMatch() {
+        // this.onMatchReady = onMatchReadyCallback; // Set the callback to handle navigation
         const rpcid = "find_match_js";
         const matches = await this.client.rpc(this.session, rpcid, {}) as FindMatchResponse;
 
-        console.log(matches);
-
-        if (matches.payload && Array.isArray(matches.payload.matchIds) && matches.payload.matchIds.length > 0) {
-            this.matchID = matches.payload.matchIds[0];
+        // if (matches.payload && Array.isArray(matches.payload.matchIds) && matches.payload.matchIds.length > 0) {
+        //     this.matchID = matches.payload.matchIds[0];
+        //     await this.socket.joinMatch(this.matchID);
+        //     localStorage.setItem("match_id", this.matchID)
+        //     // var status = {
+        //     //     "Status": "Playing a match",
+        //     //     "MatchId": this.matchID
+        //     // };
+        //     // await this.socket.updateStatus(JSON.stringify(status));
+        //     console.log("Match joined!");
+        // }
+        if (typeof matches === 'object' && matches !== null) {
+            const safeParsedJson = matches as {
+                payload: {
+                    matchIds: string[];
+                    // height: string,
+                    // weight: string,
+                    // image: string,
+                };
+            };
+            this.matchID = safeParsedJson.payload.matchIds[0]
             await this.socket.joinMatch(this.matchID);
-            // var status = {
-            //     "Status": "Playing a match",
-            //     "MatchId": this.matchID
-            // };
-            // await this.socket.updateStatus(JSON.stringify(status));
-            console.log("Match joined!");
-        } else {
+            console.log('Match joined!');
+        }
+        else {
             console.error("No match IDs found in the response.");
         }
+    }
+
+    getPlayerIds() {
+        return this.playerIds;
+    }
+
+    startListeningForPlayerPresence(callback: () => void) {
+        this.onPlayerReady = callback;
     }
 
     async makeMove(index: number) {
@@ -86,7 +130,7 @@ class Nakama {
         // } else {
         //     console.error("Cannot make move, matchID is null or socket is disconnected.");
         // }
-        var data = { "position": index };
+        const data = { "position": index };
         await this.socket.sendMatchState(this.matchID, 4, JSON.stringify(data));
         console.log("Match data sent")
     }
